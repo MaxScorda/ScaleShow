@@ -1,46 +1,46 @@
 # ScaleShow
-Versione 2026-10-28. Commenti sulle funzioni inclusi.
-ArduBoy. Scale, accordi e pentagramma in chiave di sol.
+Version 2026-10-31. Function comments are in the source.
+Arduboy sketch: scales, chords and a treble-clef staff.
 
-- Scale in notazione alfabetica (C, Db) e sillabica (Do, Reb)
-- Scale in scaleNames (config.h): le 24 di prima piu' alterata, lidia dominante, bebop dominante, bebop maggiore, ungherese minore, persiana, hirajoshi, iwato, blues maggiore, diminuita semitono-tono, aumentata, prometheus
-- Accordi della scala scelta (accMod)
-- Pentagramma in chiave di sol
-- Play della scala, dell'accordo o della nota singola
+- Alphabetical note names (C, Db) and solfege (Do, Reb)
+- Scale list is `scaleNames` in config.h. Major and minor come first, then alphabetical. Extra scales include altered, lydian dominant, bebop dominant, bebop major, Hungarian minor, Persian, Hirajoshi, Iwato, major blues, half-whole diminished, augmented and Prometheus
+- Chords of the selected scale (`accMod`). Major/minor triad first, then by degree: 6th, 7th, 9th, 11th, 13th
+- Treble clef staff
+- Play the scale, the chord, or a single note
 
-Il numero di scale e di accordi si calcola dalle righe degli array (NUM_SCALES, NUM_CHORDS).
+`NUM_SCALES` and `NUM_CHORDS` are the row counts of those arrays.
 
-ArduBoy<br>
+Arduboy<br>
 https://arduboy.com/
 
-Pentagramma (video)<br>
+Staff demo (video)<br>
 https://www.facebook.com/massimiliano.scordamaglia/videos/10154821437733406/
 
 <hr>
 
-# Schermate
-A passa alla successiva. All'ultima si riparte da KEY.
+# Screens
+A goes to the next screen. After the last one it returns to KEY.
 
-0-KEY: scala alfabetica e le due successive, font normale<br>
-1-ACC: accordi di quella scala. Su/giu cambiano l'accordo, non la scala<br>
-2-ITA: scala in Do Re Mi, piu' le due scale successive<br>
-3-MAN: scelta e play di una nota singola<br>
-4-PEN: pentagramma, chiave di sol, tutta la scala<br>
+0-KEY: alphabetical scale plus the next two, normal font. Secondary titles are inverted<br>
+1-ACC: chords of the current scale. Up/Down change the chord, not the scale<br>
+2-ITA: solfege (Do Re Mi) plus the next two scales<br>
+3-MAN: pick and play a single note<br>
+4-PEN: treble clef, the whole scale<br>
 5-INF: ScaleShow, Max Scordamaglia, 2026<br>
 
-# Tasti
-Destra / sinistra: tonica (C, Db, D...)<br>
-Giu: scala successiva. In ACC: accordo successivo<br>
-Su: scala precedente. In ACC: accordo precedente<br>
-B: play scala (KEY, ITA, PEN), accordo (ACC) o nota (MAN)<br>
-A: schermata successiva<br>
-A tenuto 3 secondi: mute. In testata compare M<br>
+# Buttons
+Right / Left: root (C, Db, D...)<br>
+Down: next scale. On ACC: next chord<br>
+Up: previous scale. On ACC: previous chord<br>
+B: play the scale (KEY, ITA, PEN), the chord (ACC) or the note (MAN)<br>
+A: next screen<br>
+Hold A for 3 seconds: mute. An M shows in the header<br>
 
-# File
-config.h: note, frequenze (A4 = 440 Hz), scaleMod, accMod, nomi<br>
-ScaleShow.ino: setup, loop, variabili globali<br>
-Funzioni.ino: tasti, lunghezza scala, nota di grado<br>
-FunzScala.ino: schermate e play<br>
-Grafica.ino: pentagramma<br>
+# Files
+config.h: note names, frequencies (A4 = 440 Hz), scaleMod, accMod, names<br>
+ScaleShow.ino: setup, loop, globals<br>
+Funzioni.ino: buttons, scale length, degree to pitch<br>
+FunzScala.ino: screens and playback<br>
+Grafica.ino: staff<br>
 
-Sopra ogni funzione c'e' il commento e, se ne ha, il significato dei parametri.
+Each function has a comment above it. Parameters are described there.
