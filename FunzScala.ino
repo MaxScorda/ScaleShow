@@ -1,10 +1,12 @@
+// Passa alla schermata successiva e la disegna.
+// rif: di quanto avanzare (di solito 1). 0 ridisegna senza cambiare.
 void cambiaStatus(byte rif) {
-  // 0-AeN  1-KEY  2-MAN  3-PEN  4-INF
-  char *labels = "AeNKEYMANPENINF";
-  statusMode = (statusMode + rif) % 5;
+  // 0-KEY  1-ACC  2-ITA  3-MAN  4-PEN  5-INF
+  const char *labels = "KEYACCITAMANPENINF";
+  statusMode = (statusMode + rif) % 6;
   arduboy.clear();
 
-  if (statusMode != 4) {
+  if (statusMode != 5) {
     for (int i = 0; i < 3; i++) {
       arduboy.drawChar(110 + (6 * i), 0, labels[(statusMode * 3) + i], BLACK, WHITE, 1);
     }
@@ -17,13 +19,15 @@ void cambiaStatus(byte rif) {
     arduboy.drawRect(2, 2, WIDTH - 4, HEIGHT - 4, WHITE);
   }
 
-  if (statusMode == 0) printScalaMode0();
-  else if (statusMode == 1) printScalaMode1();
-  else if (statusMode == 2) printScalaMode2(99, rootNote);
-  else if (statusMode == 3) showPenta();
-  else if (statusMode == 4) printInfo();
+  if (statusMode == 0) printScalaMode1();
+  else if (statusMode == 1) printAcc();
+  else if (statusMode == 2) printScalaIta();
+  else if (statusMode == 3) printScalaMode2(99, rootNote);
+  else if (statusMode == 4) showPenta();
+  else if (statusMode == 5) printInfo();
 }
 
+// Testata invertita: nome scala e tonica.
 void drawTitle() {
   arduboy.fillRect(0, 0, 104, 8, WHITE);
   arduboy.setTextColor(BLACK);
@@ -34,6 +38,8 @@ void drawTitle() {
   arduboy.setTextColor(WHITE);
 }
 
+// Note alfabetiche della scala.
+// idx: scala. y: riga in pixel. big: true font normale, false tinyfont.
 void printNotesAt(uint8_t idx, uint8_t y, bool big) {
   uint8_t n = scaleLen(idx);
   uint8_t step = big ? 18 : ((n <= 8) ? 15 : 10);
@@ -50,6 +56,8 @@ void printNotesAt(uint8_t idx, uint8_t y, bool big) {
   }
 }
 
+// Note sillabiche (Do Re Mi) della scala.
+// idx: scala. y: riga in pixel.
 void printSyllabicAt(uint8_t idx, uint8_t y) {
   uint8_t n = scaleLen(idx);
   if (n <= 7) {
@@ -71,45 +79,102 @@ void printSyllabicAt(uint8_t idx, uint8_t y) {
   }
 }
 
+// Nome e note della scala successiva, font normale.
+// idx: scala. y: riga del nome. Le note stanno 10 pixel sotto.
 void printCompactScale(uint8_t idx, uint8_t y) {
-  tinyfont.setCursor(1, y);
   char buf[12];
   strncpy_P(buf, scaleNames[idx], 11);
   buf[11] = 0;
-  tinyfont.print(buf);
-  tinyfont.print(' ');
-  tinyfont.print(scoreb[rootNote]);
-  printNotesAt(idx, y + 6, false);
+  uint8_t bar = strlen(buf) * 6 + 6 + scoreb[rootNote].length() * 6 + 2;
+  if (bar > WIDTH) bar = WIDTH;
+  arduboy.fillRect(0, y, bar, 8, WHITE);
+  arduboy.setTextColor(BLACK);
+  arduboy.setCursor(1, y);
+  arduboy.print(buf);
+  arduboy.print(' ');
+  arduboy.print(scoreb[rootNote]);
+  arduboy.setTextColor(WHITE);
+  uint8_t n = scaleLen(idx);
+  uint8_t x = 1;
+  for (uint8_t i = 0; i < n; i++) {
+    String s = scoreb[scaleNote(idx, i)];
+    uint8_t w = s.length() * 6 + 2;
+    if (x + w > WIDTH) break;
+    arduboy.setCursor(x, y + 10);
+    arduboy.print(s);
+    x += w;
+  }
 }
 
-void printScalaMode0() {
-  uint8_t n = scaleLen(scaleIdx);
-  bool big = (n <= 7);
+// Note a font normale, con spazio fra una e l'altra se ci sta.
+// idx: scala. y: riga. italian: Do Re Mi, altrimenti C Db.
+// record: salva noteX/noteY per il play (solo la scala in evidenza).
+void printSpacedNotes(uint8_t idx, uint8_t y, bool italian, bool record) {
+  uint8_t n = scaleLen(idx);
+  uint8_t w[12];
+  uint16_t total = 0;
+  if (record) {
+    for (uint8_t i = 0; i < 12; i++) noteX[i] = 255;
+  }
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t ni = scaleNote(idx, i);
+    w[i] = (italian ? scoreN[ni].length() : scoreb[ni].length()) * 6;
+    total += w[i];
+  }
+  uint8_t gap = 0;
+  if (n > 1) {
+    if (total + (uint16_t)(n - 1) * 3 <= WIDTH) gap = 3;
+    else if (total + (uint16_t)(n - 1) * 2 <= WIDTH) gap = 2;
+    else if (total + (uint16_t)(n - 1) <= WIDTH) gap = 1;
+  }
+  uint8_t x = 1;
+  for (uint8_t i = 0; i < n; i++) {
+    if ((uint16_t)x + w[i] > WIDTH) break;
+    if (record) {
+      noteX[i] = x;
+      noteY[i] = y;
+    }
+    arduboy.setCursor(x, y);
+    if (italian) arduboy.print(scoreN[scaleNote(idx, i)]);
+    else arduboy.print(scoreb[scaleNote(idx, i)]);
+    x += w[i] + gap;
+  }
+}
+
+// Schermata ITA: scala in Do Re Mi e le due scale successive.
+void printScalaIta() {
   drawTitle();
   arduboy.fillRect(0, 11, WIDTH, 53, BLACK);
-  printNotesAt(scaleIdx, 12, big);
-  printSyllabicAt(scaleIdx, big ? 22 : 20);
-  arduboy.drawFastHLine(0, 32, WIDTH, WHITE);
-  printCompactScale((scaleIdx + 1) % NUM_SCALES, 35);
-  printCompactScale((scaleIdx + 2) % NUM_SCALES, 49);
+  printSpacedNotes(scaleIdx, 12, true, true);
+  arduboy.drawFastHLine(0, 22, WIDTH, WHITE);
+  for (uint8_t k = 1; k <= 2; k++) {
+    uint8_t idx = (scaleIdx + k) % NUM_SCALES;
+    uint8_t y = (k == 1) ? 24 : 44;
+    char buf[12];
+    strncpy_P(buf, scaleNames[idx], 11);
+    buf[11] = 0;
+    arduboy.setCursor(1, y);
+    arduboy.print(buf);
+    printSpacedNotes(idx, y + 10, true, false);
+  }
 }
 
+// Schermata KEY: note della scala e le due successive, font normale.
 void printScalaMode1() {
   uint8_t n = scaleLen(scaleIdx);
   drawTitle();
   arduboy.fillRect(0, 11, WIDTH, 53, BLACK);
-  printNotesAt(scaleIdx, 13, n <= 7);
-  arduboy.drawFastHLine(0, 24, WIDTH, WHITE);
-  printCompactScale((scaleIdx + 1) % NUM_SCALES, 28);
-  printCompactScale((scaleIdx + 2) % NUM_SCALES, 46);
+  printNotesAt(scaleIdx, 12, n <= 7);
+  arduboy.drawFastHLine(0, 22, WIDTH, WHITE);
+  printCompactScale((scaleIdx + 1) % NUM_SCALES, 24);
+  printCompactScale((scaleIdx + 2) % NUM_SCALES, 44);
 }
 
+// Suona la scala di KEY o ITA ed evidenzia la nota corrente.
 void playScala() {
   uint8_t n = scaleLen(scaleIdx);
   bool big = (n <= 7);
   uint8_t step = big ? 18 : ((n <= 8) ? 15 : 10);
-  uint8_t y = (statusMode == 0) ? 11 : 12;
-  uint8_t h = big ? 10 : 8;
   int durata = (n > 8) ? 420 : 800;
   int first = pgm_read_word(&allNotes[scaleNote(scaleIdx, 0)]);
 
@@ -118,15 +183,27 @@ void playScala() {
     int nota = pgm_read_word(&allNotes[scaleNote(scaleIdx, i)]);
     if (nota < first) nota *= 2;
     sound.tone(nota, durata);
-    arduboy.drawRect(i * step, y, step - 1, h, WHITE);
+    if (statusMode == 2) {
+      if (noteX[i] < WIDTH) {
+        uint8_t pc = scaleNote(scaleIdx, i);
+        arduboy.drawRect(noteX[i], noteY[i], scoreN[pc].length() * 6 + 1, 8, WHITE);
+      }
+    }
+    else {
+      arduboy.drawRect(i * step, 12, step - 1, 10, WHITE);
+    }
     arduboy.display();
     while (sound.playing()) {}
-    arduboy.drawRect(i * step, y, step - 1, h, BLACK);
+    if (statusMode == 2) printScalaIta();
+    else printScalaMode1();
     arduboy.display();
   }
   arduboy.audio.off();
 }
 
+// Schermata MAN: griglia cromatica con la tonica incorniciata.
+// oldpos: nota prima, 0..11, oppure 99 per disegnare tutta la griglia.
+// newpos: nota nuova, 0..11.
 void printScalaMode2(byte oldpos, byte newpos) {
   arduboy.fillRect(0, 0, 104, 8, BLACK);
   arduboy.setCursor(1, 0);
@@ -148,6 +225,7 @@ void printScalaMode2(byte oldpos, byte newpos) {
   }
 }
 
+// Suona la singola nota scelta in MAN.
 void playScalaMod2() {
   if (!mute) arduboy.audio.on();
   int nota = pgm_read_word(&allNotes[rootNote]);
@@ -157,6 +235,7 @@ void playScalaMod2() {
   arduboy.audio.off();
 }
 
+// Suona la scala sul pentagramma. A ogni nota cancella e ridisegna il rigo.
 void playScalaMod3() {
   uint8_t n = scaleLen(scaleIdx);
   int durata = (n > 8) ? 380 : 700;
@@ -166,16 +245,17 @@ void playScalaMod3() {
     int nota = pgm_read_word(&allNotes[scaleNote(scaleIdx, i)]);
     if (nota < first) nota *= 2;
     sound.tone(nota, durata);
-    arduboy.drawCircle(pnotes[i].x + 2, pnotes[i].y, 5, WHITE);
+    showPenta();
+    if (i < pentaN) arduboy.drawCircle(pnotes[i].x + 3, pnotes[i].y, 6, WHITE);
     arduboy.display();
     while (sound.playing()) {}
-    arduboy.drawCircle(pnotes[i].x + 2, pnotes[i].y, 5, BLACK);
-    redrawPentaNote(i);
-    arduboy.display();
   }
+  showPenta();
+  arduboy.display();
   arduboy.audio.off();
 }
 
+// Schermata INF: nome, autore, anno.
 void printInfo() {
   arduboy.setCursor(10, 8);
   arduboy.setTextSize(2);
@@ -187,4 +267,110 @@ void printInfo() {
   arduboy.print(F("maxscorda@gmail.com"));
   arduboy.setCursor(8, 50);
   arduboy.print(F("(c) 2026"));
+}
+
+// Quante note ha l'accordo, si ferma al 99.
+// c: indice in accMod (0 e' vuoto).
+uint8_t chordLen(uint8_t c) {
+  uint8_t n = 0;
+  while (n < 6 && pgm_read_byte(&accMod[c][n * 2]) != 99) n++;
+  return n;
+}
+
+// Alterazione in semitoni della nota i.
+// c: accordo. i: indice nota nell'accordo.
+// 9 settima minore, 8 settima maggiore, 7 terza minore,
+// 6 quinta diminuita, 4 settima diminuita. Vedi config.h.
+int8_t chordAlt(uint8_t c, uint8_t i) {
+  int8_t alt = (int8_t)pgm_read_byte(&accMod[c][i * 2 + 1]);
+  uint8_t n = scaleLen(scaleIdx);
+  uint8_t grado = pgm_read_byte(&accMod[c][i * 2]);
+  int iv = (int)pgm_read_word(&scaleMod[scaleIdx][grado % n]);
+  if (alt == 8 || alt == 9) {
+    if (n < 7) return 0;
+    uint8_t sev = pgm_read_word(&scaleMod[scaleIdx][6]);
+    if (alt == 9) return (sev == 11) ? -1 : 0;
+    return (sev == 10) ? 1 : 0;
+  }
+  if (alt == 7) return (iv == 4) ? -1 : 0;
+  if (alt == 6) return (iv == 7) ? -1 : 0;
+  if (alt == 4) {
+    if (iv == 11) return -2;
+    if (iv == 10) return -1;
+    return 0;
+  }
+  return alt;
+}
+
+// Grado di scala della nota i (0 tonica, 2 terza, 4 quinta...).
+// c: accordo. i: indice nota.
+uint8_t chordGrado(uint8_t c, uint8_t i) {
+  return pgm_read_byte(&accMod[c][i * 2]);
+}
+
+// Pitch class della nota d'accordo.
+// grado: indice nella scala. alt: semitoni da sommare, puo' essere negativo.
+uint8_t chordPc(uint8_t grado, int8_t alt) {
+  uint8_t n = scaleLen(scaleIdx);
+  uint8_t idx = grado % n;
+  int semis = (int)pgm_read_word(&scaleMod[scaleIdx][idx]) + alt;
+  int pc = ((int)rootNote + semis) % 12;
+  if (pc < 0) pc += 12;
+  return pc;
+}
+
+// Distanza in semitoni dalla tonica, ottave comprese. Serve al play.
+// grado: indice nella scala. alt: semitoni da sommare.
+int chordSemis(uint8_t grado, int8_t alt) {
+  uint8_t n = scaleLen(scaleIdx);
+  return (int)pgm_read_word(&scaleMod[scaleIdx][grado % n]) + alt + (grado / n) * 12;
+}
+
+// Schermata ACC: titolo e note della scala, poi nome e note dell'accordo.
+void printAcc() {
+  char buf[12];
+  drawTitle();
+  arduboy.fillRect(0, 11, WIDTH, 53, BLACK);
+
+  printSpacedNotes(scaleIdx, 12, false, false);
+  arduboy.drawFastHLine(0, 22, WIDTH, WHITE);
+
+  arduboy.setCursor(1, 26);
+  if (chordIdx < NUM_CHORDS) {
+    strncpy_P(buf, chordNames[chordIdx], 11);
+    buf[11] = 0;
+    arduboy.print(buf);
+  }
+
+  uint8_t n = chordLen(chordIdx);
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t pc = chordPc(chordGrado(chordIdx, i), chordAlt(chordIdx, i));
+    arduboy.setCursor(1 + i * 18, 40);
+    arduboy.print(scoreb[pc]);
+  }
+}
+
+// Suona le note dell'accordo corrente.
+void playAcc() {
+  uint8_t n = chordLen(chordIdx);
+  if (n == 0) return;
+  int first = chordSemis(chordGrado(chordIdx, 0), chordAlt(chordIdx, 0));
+  if (!mute) arduboy.audio.on();
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t g = chordGrado(chordIdx, i);
+    int8_t alt = chordAlt(chordIdx, i);
+    int semis = chordSemis(g, alt);
+    int nota = pgm_read_word(&allNotes[chordPc(g, alt)]);
+    while (semis - first >= 12) {
+      nota *= 2;
+      semis -= 12;
+    }
+    sound.tone(nota, 700);
+    arduboy.drawRect(i * 18, 38, 17, 12, WHITE);
+    arduboy.display();
+    while (sound.playing()) {}
+    arduboy.drawRect(i * 18, 38, 17, 12, BLACK);
+    arduboy.display();
+  }
+  arduboy.audio.off();
 }
