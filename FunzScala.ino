@@ -170,18 +170,30 @@ void printScalaMode1() {
   printCompactScale((scaleIdx + 2) % NUM_SCALES, 44);
 }
 
+// Frequenza che sale dalla tonica. semis: semitoni sopra la tonica, anche oltre 12.
+int toneAt(uint8_t pc, int semis) {
+  int nota = pgm_read_word(&allNotes[rootNote]);
+  int base = nota;
+  while (semis >= 12) {
+    nota *= 2;
+    semis -= 12;
+  }
+  int step = pgm_read_word(&allNotes[pc]);
+  if (step < base) step *= 2;
+  return (int)((long)nota * step / base);
+}
+
 // Suona la scala di KEY o ITA ed evidenzia la nota corrente.
 void playScala() {
   uint8_t n = scaleLen(scaleIdx);
   bool big = (n <= 7);
   uint8_t step = big ? 18 : ((n <= 8) ? 15 : 10);
   int durata = (n > 8) ? 420 : 800;
-  int first = pgm_read_word(&allNotes[scaleNote(scaleIdx, 0)]);
 
   if (!mute) arduboy.audio.on();
   for (uint8_t i = 0; i < n; i++) {
-    int nota = pgm_read_word(&allNotes[scaleNote(scaleIdx, i)]);
-    if (nota < first) nota *= 2;
+    int iv = pgm_read_word(&scaleMod[scaleIdx][i]);
+    int nota = toneAt(scaleNote(scaleIdx, i), iv);
     sound.tone(nota, durata);
     if (statusMode == 2) {
       if (noteX[i] < WIDTH) {
@@ -239,11 +251,10 @@ void playScalaMod2() {
 void playScalaMod3() {
   uint8_t n = scaleLen(scaleIdx);
   int durata = (n > 8) ? 380 : 700;
-  int first = pgm_read_word(&allNotes[scaleNote(scaleIdx, 0)]);
   if (!mute) arduboy.audio.on();
   for (uint8_t i = 0; i < n; i++) {
-    int nota = pgm_read_word(&allNotes[scaleNote(scaleIdx, i)]);
-    if (nota < first) nota *= 2;
+    int iv = pgm_read_word(&scaleMod[scaleIdx][i]);
+    int nota = toneAt(scaleNote(scaleIdx, i), iv);
     sound.tone(nota, durata);
     showPenta();
     if (i < pentaN) arduboy.drawCircle(pnotes[i].x + 3, pnotes[i].y, 6, WHITE);
@@ -326,6 +337,32 @@ int chordSemis(uint8_t grado, int8_t alt) {
   return (int)pgm_read_word(&scaleMod[scaleIdx][grado % n]) + alt + (grado / n) * 12;
 }
 
+// Stampa l'intervallo sotto la nota. semis: distanza dalla tonica. grado: indice in scala.
+void printInterval(uint8_t x, uint8_t y, int semis, uint8_t grado) {
+  while (semis < 0) semis += 12;
+  arduboy.setCursor(x, y);
+  if (semis == 0) arduboy.print(F("1"));
+  else if (semis == 1) arduboy.print(F("b2"));
+  else if (semis == 2) arduboy.print(grado >= 8 ? F("9") : F("2"));
+  else if (semis == 3) arduboy.print(F("b3"));
+  else if (semis == 4) arduboy.print(F("3"));
+  else if (semis == 5) arduboy.print(grado >= 10 ? F("11") : F("4"));
+  else if (semis == 6) arduboy.print(grado >= 10 ? F("#11") : F("b5"));
+  else if (semis == 7) arduboy.print(F("5"));
+  else if (semis == 8) arduboy.print(grado >= 12 ? F("b13") : (grado == 4 ? F("#5") : F("b6")));
+  else if (semis == 9) arduboy.print(grado >= 12 ? F("13") : (grado == 6 ? F("bb7") : F("6")));
+  else if (semis == 10) arduboy.print(F("b7"));
+  else if (semis == 11) arduboy.print(F("7"));
+  else if (semis == 13) arduboy.print(F("b9"));
+  else if (semis == 14) arduboy.print(F("9"));
+  else if (semis == 15) arduboy.print(F("#9"));
+  else if (semis == 17) arduboy.print(F("11"));
+  else if (semis == 18) arduboy.print(F("#11"));
+  else if (semis == 20) arduboy.print(F("b13"));
+  else if (semis == 21) arduboy.print(F("13"));
+  else arduboy.print(semis);
+}
+
 // Schermata ACC: titolo e note della scala, poi nome e note dell'accordo.
 void printAcc() {
   char buf[12];
@@ -335,18 +372,27 @@ void printAcc() {
   printSpacedNotes(scaleIdx, 12, false, false);
   arduboy.drawFastHLine(0, 22, WIDTH, WHITE);
 
-  arduboy.setCursor(1, 26);
+  buf[0] = 0;
   if (chordIdx < NUM_CHORDS) {
     strncpy_P(buf, chordNames[chordIdx], 11);
     buf[11] = 0;
-    arduboy.print(buf);
   }
+  uint8_t bar = strlen(buf) * 6 + 2;
+  if (bar < 8) bar = 8;
+  arduboy.fillRect(0, 26, bar, 8, WHITE);
+  arduboy.setTextColor(BLACK);
+  arduboy.setCursor(1, 26);
+  arduboy.print(buf);
+  arduboy.setTextColor(WHITE);
 
   uint8_t n = chordLen(chordIdx);
   for (uint8_t i = 0; i < n; i++) {
-    uint8_t pc = chordPc(chordGrado(chordIdx, i), chordAlt(chordIdx, i));
-    arduboy.setCursor(1 + i * 18, 40);
-    arduboy.print(scoreb[pc]);
+    uint8_t g = chordGrado(chordIdx, i);
+    int8_t alt = chordAlt(chordIdx, i);
+    uint8_t x = 1 + i * 18;
+    arduboy.setCursor(x, 38);
+    arduboy.print(scoreb[chordPc(g, alt)]);
+    printInterval(x, 50, chordSemis(g, alt), g);
   }
 }
 
@@ -354,22 +400,16 @@ void printAcc() {
 void playAcc() {
   uint8_t n = chordLen(chordIdx);
   if (n == 0) return;
-  int first = chordSemis(chordGrado(chordIdx, 0), chordAlt(chordIdx, 0));
   if (!mute) arduboy.audio.on();
   for (uint8_t i = 0; i < n; i++) {
     uint8_t g = chordGrado(chordIdx, i);
     int8_t alt = chordAlt(chordIdx, i);
-    int semis = chordSemis(g, alt);
-    int nota = pgm_read_word(&allNotes[chordPc(g, alt)]);
-    while (semis - first >= 12) {
-      nota *= 2;
-      semis -= 12;
-    }
+    int nota = toneAt(chordPc(g, alt), chordSemis(g, alt));
     sound.tone(nota, 700);
-    arduboy.drawRect(i * 18, 38, 17, 12, WHITE);
+    arduboy.drawRect(i * 18, 36, 17, 12, WHITE);
     arduboy.display();
     while (sound.playing()) {}
-    arduboy.drawRect(i * 18, 38, 17, 12, BLACK);
+    arduboy.drawRect(i * 18, 36, 17, 12, BLACK);
     arduboy.display();
   }
   arduboy.audio.off();
