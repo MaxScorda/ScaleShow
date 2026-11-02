@@ -153,8 +153,13 @@ void printScalaIta() {
     char buf[12];
     strncpy_P(buf, scaleNames[idx], 11);
     buf[11] = 0;
+    uint8_t bar = strlen(buf) * 6 + 2;
+    if (bar > WIDTH) bar = WIDTH;
+    arduboy.fillRect(0, y, bar, 8, WHITE);
+    arduboy.setTextColor(BLACK);
     arduboy.setCursor(1, y);
     arduboy.print(buf);
+    arduboy.setTextColor(WHITE);
     printSpacedNotes(idx, y + 10, true, false);
   }
 }
